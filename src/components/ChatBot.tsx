@@ -34,9 +34,17 @@ interface ConversationMemory {
   lastActiveTimestamp: number;
 }
 
+// Add OpenAI message interface
+interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant' | string;
+  content: string;
+}
+
 const CHAT_HISTORY_KEY = 'arxen_chat_history';
 const LOCAL_STORAGE_KEY = 'arxen_chatbot_opened';
 const CONVO_MEMORY_KEY = 'arxen_chat_memory';
+// API key should be stored securely in environment variables on the server
+const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY || "YOUR_API_KEY_HERE";
 
 // Service categories for quick help options
 const serviceCategories = [
@@ -1390,10 +1398,6 @@ const advancedSpecializedTopics: KnowledgeBaseEntry[] = [
     response: "HVAC load calculations using Manual J methodology assess your home's specific cooling and heating requirements based on multiple variables including square footage, ceiling height, insulation values, window specifications, air infiltration rates, local climate data, and internal heat gains. Unlike simplified tonnage rules of thumb, proper Manual J calculations prevent both undersizing (causing inadequate temperature control) and oversizing (leading to short-cycling, poor humidity control, and reduced equipment life). Our HVAC partners perform room-by-room load calculations using ACCA-approved software to specify equipment with appropriate capacity and properly sized ductwork for balanced airflow throughout your renovated space."
   },
   {
-    patterns: ['r value calculation', 'insulation requirements', 'thermal boundary', 'continuous insulation', 'thermal bridging'],
-    response: "Effective insulation strategies address not just nominal R-value but also installation quality, thermal bridging, and appropriate placement of the thermal boundary. Our approach includes evaluating wall assemblies with attention to insulation compression, voids, and thermal bridging through framing members (which typically conduct heat at R-1 per inch versus R-3.5-4 for insulation). We implement advanced framing techniques where appropriate, specify continuous insulation layers in key areas, and ensure proper air sealing as a critical companion to insulation. For existing homes, we consider both classical insulation placement and alternative strategies for challenging areas like floors over unconditioned spaces and cathedral ceilings with limited depth."
-  },
-  {
     patterns: ['moisture barrier installation', 'vapor barrier location', 'vapor retarder', 'vapor diffusion', 'moisture management'],
     response: "Proper moisture management requires careful consideration of vapor drive direction, which changes seasonally in Atlanta's mixed-humid climate zone. Our approach addresses both bulk water management through appropriate flashing details and vapor diffusion through strategic placement of vapor retarders. In our climate, vapor retarders should generally be placed on the exterior in cooling-dominated seasons and interior during heating seasons, creating a design challenge. We typically implement vapor-permeable weather-resistant barriers on the exterior, appropriate sheathing materials, and sometimes smart vapor retarders on interior surfaces that adjust permeance based on ambient humidity to accommodate seasonal changes in vapor drive direction."
   },
@@ -1818,6 +1822,15 @@ const ChatBot: React.FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
+  // Add OpenAI integration state
+  const [isLiveAgentActive, setIsLiveAgentActive] = useState(false);
+  const [openAIMessages, setOpenAIMessages] = useState<OpenAIMessage[]>([
+    {
+      role: 'system',
+      content: 'You are a helpful AI assistant for Arxen Construction, a company specializing in residential and commercial construction and remodeling services. Respond conversationally to customer inquiries about construction services, remodeling, project timelines, and costs. Be friendly, professional, and provide detailed information about construction services.'
+    }
+  ]);
+  
   // Add conversation memory state
   const [conversationMemory, setConversationMemory] = useState<ConversationMemory>({
     topics: [],
@@ -1837,6 +1850,51 @@ const ChatBot: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+  
+  // Add function to handle OpenAI API calls
+  const callOpenAI = async (userMessage: string) => {
+    try {
+      // Add user message to OpenAI messages
+      const updatedMessages = [
+        ...openAIMessages,
+        { role: 'user', content: userMessage }
+      ];
+      
+      // Make API call to OpenAI
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: updatedMessages,
+          max_tokens: 500,
+          temperature: 0.7
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Error calling OpenAI API');
+      }
+      
+      const aiResponse = data.choices[0]?.message?.content || "I'm sorry, I couldn't process your request at the moment.";
+      
+      // Update OpenAI messages with assistant's response
+      setOpenAIMessages([
+        ...updatedMessages,
+        { role: 'assistant', content: aiResponse }
+      ]);
+      
+      return aiResponse;
+    } catch (error) {
+      console.error('Error calling OpenAI API:', error);
+      return "I'm having trouble connecting to my language processing service. Would you like to speak with a human team member instead?";
+    }
+  };
   
   // Check if we're on the FreeEstimate page to avoid duplicate chat widgets
   const isFreeEstimatePage = location.pathname.includes('/free-estimate');
@@ -2238,14 +2296,48 @@ const ChatBot: React.FC = () => {
       case 'speak':
         userMessage.text = "I'd like to speak with a representative";
         botResponse = {
-          text: "I'd be happy to connect you with one of our experts. You can reach our team through any of these options:",
+          text: "I'd be happy to connect you with one of our experts. You can reach our team through any of these options, or talk to our AI assistant for immediate help:",
           isUser: false,
           timestamp: Date.now(),
-          type: 'contact',
+          type: 'option',
           options: [
             { text: "Call Us: 404-934-9458", action: "tel:404-934-9458" },
             { text: "Email: sustenablet@gmail.com", action: "mailto:sustenablet@gmail.com" },
-            { text: "Contact Form", action: "/contact" }
+            { text: "Contact Form", action: "/contact" },
+            { text: "Talk to AI Assistant", action: "live-agent" }
+          ]
+        };
+        break;
+        
+      case 'live-agent':
+        userMessage.text = "I'd like to talk to a live AI agent";
+        setIsLiveAgentActive(true);
+        botResponse = {
+          text: "You're now connected to our AI assistant. Feel free to ask any questions about our construction and remodeling services, and I'll do my best to help you!",
+          isUser: false,
+          timestamp: Date.now()
+        };
+        break;
+        
+      case 'end-live-agent':
+        userMessage.text = "I'd like to end my conversation with the AI assistant";
+        setIsLiveAgentActive(false);
+        // Reset OpenAI conversation history
+        setOpenAIMessages([
+          {
+            role: 'system',
+            content: 'You are a helpful AI assistant for Arxen Construction, a company specializing in residential and commercial construction and remodeling services. Respond conversationally to customer inquiries about construction services, remodeling, project timelines, and costs. Be friendly, professional, and provide detailed information about construction services.'
+          }
+        ]);
+        botResponse = {
+          text: "You've returned to our standard chat assistant. How else can I help you today?",
+          isUser: false,
+          timestamp: Date.now(),
+          type: 'option',
+          options: [
+            { text: "Services", action: "services" },
+            { text: "Free Estimate", action: "estimate" },
+            { text: "Contact Us", action: "speak" }
           ]
         };
         break;
@@ -2750,7 +2842,7 @@ const ChatBot: React.FC = () => {
     }, 1000);
   };
 
-  // Modify handleSubmit to incorporate conversation memory
+  // Modify handleSubmit to incorporate conversation memory and OpenAI
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
@@ -2766,6 +2858,26 @@ const ChatBot: React.FC = () => {
 
     // Process message and determine response
     setIsTyping(true);
+    
+    // If live agent is active, use OpenAI API
+    if (isLiveAgentActive) {
+      // Call OpenAI API
+      callOpenAI(message).then(aiResponse => {
+        const botResponse: ChatMessage = {
+          text: aiResponse,
+          isUser: false,
+          timestamp: Date.now()
+        };
+        
+        setTimeout(() => {
+          setMessages(prev => [...prev, botResponse]);
+          setIsTyping(false);
+          scrollToBottom();
+        }, 1000);
+      });
+      
+      return;
+    }
     
     // Simple keyword matching for better responses
     const lowerMsg = message.toLowerCase();
@@ -3844,7 +3956,6 @@ const ChatBot: React.FC = () => {
           }
         }
       }
-    }
     
     // Update conversation memory with this interaction
     updateConversationMemory(message, botResponse.text);
@@ -3863,6 +3974,23 @@ const ChatBot: React.FC = () => {
   };
 
   const renderMessageContent = (msg: ChatMessage) => {
+    // If live agent is active and this is a bot message, add an end chat button
+    if (isLiveAgentActive && !msg.isUser && !msg.type) {
+      return (
+        <div>
+          <div className="mb-2">{msg.text}</div>
+          <div className="mt-2">
+            <button
+              onClick={() => handleOptionSelect('end-live-agent')}
+              className="px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs transition-colors"
+            >
+              End AI Chat
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
     if (msg.type === 'option' && msg.options) {
       return (
         <div>
@@ -4529,4 +4657,6 @@ const ChatBot: React.FC = () => {
   );
 };
 
-export default ChatBot; 
+}
+
+export default ChatBot;
