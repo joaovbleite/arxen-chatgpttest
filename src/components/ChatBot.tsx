@@ -1809,7 +1809,7 @@ const ChatBot: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const pathname = location.pathname;
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
