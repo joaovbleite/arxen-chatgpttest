@@ -1273,7 +1273,7 @@ const advancedSpecializedTopics: KnowledgeBaseEntry[] = [
   // Virginia Highland/Morningside
   {
     patterns: ['virginia highland renovation', 'morningside remodel', 'va-hi home project', 'renovating virginia highland', 'morningside bungalow'],
-    response: "Virginia-Highland and Morningside renovations typically involve charming 1920s-1940s properties with distinctive character. These neighborhoods feature many original bungalows, Craftsman homes, and Tudor cottages that benefit from thoughtful updates respecting architectural heritage. Common projects include creating more functional kitchen spaces while maintaining period details, finishing previously unfinished basements for additional living space, appropriate dormer additions for second-floor expansions, and modernizing mechanical systems without disturbing historic elements. We're familiar with the community aesthetic expectations in these established intown neighborhoods."
+    response: "Virginia-Highland and Morningside renovations typically involve charming 1920s-1940s properties with distinctive character. These neighborhoods feature many original bungalows, Craftsman homes, and Tudor cottages that benefit from thoughtful updates respecting architectural heritage. Common projects include creating more functional kitchen spaces while maintaining period details, finished previously unfinished basements for additional living space, appropriate dormer additions for second-floor expansions, and modernizing mechanical systems without disturbing historic elements. We're familiar with the community aesthetic expectations in these established intown neighborhoods."
   },
   {
     patterns: ['historic va-hi', 'original bungalow renovation', 'historic morningside', 'renovating old home virginia highland', 'vintage atlanta home'],
@@ -1865,7 +1865,7 @@ const ChatBot: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`
+          'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`
         },
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
